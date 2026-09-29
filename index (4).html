@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>フリマ在庫リスト</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Sans:opsz,wght@9..40,500;9..40,700&display=swap">
+<style>
+/* Layout: iOSリマインダー風 — 収支サマリー → 状態別タイル → リスト（各行に獲得・売上・利益）→ 追加行 */
+:root{
+  --bg:#f2f2f6; --surface:#ffffff; --fg:#1c1c1f; --muted:#8a8a93; --line:#e4e4ea; --accent:#e5484d; --field:#f4f4f7;
+  --s0:#8e8e98; --s1:#e5484d; --s2:#d98a1c; --s3:#2f7de1; --s4:#2f9e5b;
+  --s0bg:#ececf0; --s1bg:#fdecec; --s2bg:#fbf1e1; --s3bg:#e7f0fc; --s4bg:#e5f4ea;
+  --plus:#2f9e5b; --minus:#e5484d;
+  --font:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --num:"DM Sans","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#000; --surface:#1c1c1e; --fg:#f2f2f5; --muted:#8e8e96; --line:#2c2c30; --accent:#ff6369; --field:#2a2a2e;
+  --s0:#a0a0aa; --s1:#ff6369; --s2:#f0a53a; --s3:#5b9cf0; --s4:#4cc27a;
+  --s0bg:#2a2a2e; --s1bg:#3a1c1e; --s2bg:#3a2a14; --s3bg:#16263b; --s4bg:#16301f;
+  --plus:#4cc27a; --minus:#ff6369; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#000; --surface:#1c1c1e; --fg:#f2f2f5; --muted:#8e8e96; --line:#2c2c30; --accent:#ff6369; --field:#2a2a2e;
+  --s0:#a0a0aa; --s1:#ff6369; --s2:#f0a53a; --s3:#5b9cf0; --s4:#4cc27a;
+  --s0bg:#2a2a2e; --s1bg:#3a1c1e; --s2bg:#3a2a14; --s3bg:#16263b; --s4bg:#16301f;
+  --plus:#4cc27a; --minus:#ff6369; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:24px 16px 48px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px}
+h1{font-size:30px;font-weight:700;margin:0;letter-spacing:.01em}
+.edit-btn{background:none;border:0;color:var(--accent);font:500 16px var(--font);cursor:pointer;padding:4px}
+.yen{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* 収支サマリー */
+.summary{background:var(--surface);border-radius:14px;padding:16px;margin-bottom:12px;display:flex;flex-direction:column;gap:14px}
+.sum-head{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--muted);font-weight:500}
+.profit{display:flex;flex-direction:column;gap:2px}
+.profit .lbl{font-size:13px;color:var(--muted);font-weight:500}
+.profit .big{font:700 34px var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.profit .big.pos{color:var(--plus)} .profit .big.neg{color:var(--minus)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.pair div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pair .lbl{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.04em}
+.pair .v{font:700 20px var(--num);font-variant-numeric:tabular-nums}
+.pair .sub{font-size:12px;color:var(--muted)}
+
+/* 状態別タイル */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.tile{background:var(--surface);border:0;border-radius:12px;padding:10px 12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:6px;color:var(--fg);font-family:var(--font)}
+.tile.on{box-shadow:inset 0 0 0 2px var(--c)}
+.tile .top{display:flex;justify-content:space-between;align-items:center}
+.dot{width:26px;height:26px;border-radius:50%;background:var(--c);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:700}
+.tile .n{font:700 24px var(--num);font-variant-numeric:tabular-nums}
+.tile .lbl{font-size:13px;font-weight:500;color:var(--muted)}
+
+.section-title{display:flex;justify-content:space-between;align-items:baseline;margin:0 4px 8px}
+.section-title h2{font-size:20px;margin:0}
+.section-title span{color:var(--muted);font-size:14px;font-family:var(--num)}
+
+.list{background:var(--surface);border-radius:12px 12px 0 0;overflow:hidden}
+.row{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.check{flex:none;width:22px;height:22px;margin-top:2px;border-radius:50%;border:2px solid var(--c);background:transparent;cursor:pointer;display:grid;place-items:center;padding:0}
+.check.done{background:var(--c)}
+.check.done::after{content:"";width:6px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.body{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.line1{display:flex;align-items:flex-start;gap:10px}
+.name{flex:1;min-width:0}
+.name input{width:100%;border:0;background:transparent;font:16px/1.4 var(--font);color:var(--fg);padding:1px 0;outline:none}
+.row.is-done .name input{color:var(--muted)}
+
+/* 金額行 */
+.money{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;color:var(--muted)}
+.amt{display:flex;align-items:center;gap:4px;background:var(--field);border-radius:8px;padding:4px 8px}
+.amt span{font-weight:500}
+.amt input{width:5.5em;border:0;background:transparent;font:500 14px var(--num);font-variant-numeric:tabular-nums;color:var(--fg);outline:none;padding:0;text-align:right}
+.amt input::placeholder{color:var(--muted)}
+.amt:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.arrow{color:var(--muted)}
+.pl{margin-left:auto;font:700 14px var(--num);font-variant-numeric:tabular-nums}
+.pl.pos{color:var(--plus)} .pl.neg{color:var(--minus)} .pl.none{color:var(--muted);font-weight:500;font-family:var(--font);font-size:12px}
+
+.pill{position:relative;flex:none}
+.pill select{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;background:var(--cbg);color:var(--c);font:700 13px var(--font);padding:6px 26px 6px 12px;cursor:pointer}
+.pill::after{content:"";position:absolute;right:11px;top:50%;width:6px;height:6px;border:solid var(--c);border-width:0 2px 2px 0;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.pill select:focus-visible,.check:focus-visible,.tile:focus-visible,.del:focus-visible,.edit-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.del{flex:none;width:24px;height:24px;margin-top:1px;border-radius:50%;border:0;background:var(--s1);color:#fff;font-size:16px;line-height:1;cursor:pointer;display:none}
+.editing .del{display:block}
+
+.add{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border-radius:0 0 12px 12px}
+.add .plus{flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:18px;font-weight:700;line-height:1}
+.add input{flex:1;min-width:0;border:0;background:transparent;font:16px var(--font);color:var(--fg);outline:none;padding:4px 0}
+.add input::placeholder{color:var(--muted)}
+.add button{border:0;background:none;color:var(--accent);font:700 15px var(--font);cursor:pointer}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px;border-bottom:1px solid var(--line)}
+.note{margin:16px 4px 0;font-size:12px;color:var(--muted);line-height:1.7}
+@media (max-width:420px){.tiles{gap:8px}.tile{padding:8px 10px}.tile .n{font-size:20px}.profit .big{font-size:30px}}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">
+  <header>
+    <h1>在庫</h1>
+    <button class="edit-btn" id="editBtn" type="button">編集</button>
+  </header>
+
+  <section class="summary" aria-label="収支">
+    <div class="sum-head"><span id="sumScope">すべての商品</span><span id="sumCount"></span></div>
+    <div class="profit"><span class="lbl">利益（売上 − 獲得）</span><span class="big" id="sumProfit">¥0</span></div>
+    <div class="pair">
+      <div><span class="lbl">獲得金額</span><span class="v yen" id="sumCost">¥0</span><span class="sub" id="sumCostSub"></span></div>
+      <div><span class="lbl">売上金額</span><span class="v yen" id="sumSale">¥0</span><span class="sub" id="sumSaleSub"></span></div>
+    </div>
+  </section>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="section-title"><h2 id="listTitle">すべて</h2><span id="listCount"></span></div>
+  <div class="list" id="list"></div>
+  <form class="add" id="addForm" autocomplete="off">
+    <span class="plus" aria-hidden="true">+</span>
+    <input id="newName" type="text" placeholder="新しい商品を追加" aria-label="商品名">
+    <button type="submit">追加</button>
+  </form>
+  <p class="note">金額は各商品の「獲得」「売上」をタップして入力します。利益は両方入力した商品だけで計算します。上のタイルで絞り込むと、収支もその状態の商品だけの合計になります。サンプルの商品が入っています（「編集」から削除できます）。</p>
+</div>
+
+<script>
+const STATUSES=[
+  {k:"未獲得",c:"--s0",bg:"--s0bg"},
+  {k:"販売中",c:"--s1",bg:"--s1bg"},
+  {k:"梱包済み",c:"--s2",bg:"--s2bg"},
+  {k:"発送中",c:"--s3",bg:"--s3bg"},
+  {k:"完了",c:"--s4",bg:"--s4bg"},
+];
+const KEY="zaiko-v1";
+const SAMPLE_PRICES={1:[1800,3200],2:[400,1200],3:[1500,2980],4:[null,null],5:[2500,4800]};
+let items=null;
+try{items=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!Array.isArray(items)) items=[
+  {id:1,name:"ニンテンドースイッチ用 コントローラー",st:"販売中"},
+  {id:2,name:"無印良品 ステンレスボトル 500ml",st:"梱包済み"},
+  {id:3,name:"ユニクロ ウルトラライトダウン M",st:"発送中"},
+  {id:4,name:"文庫本まとめ売り 5冊",st:"未獲得"},
+  {id:5,name:"ワイヤレスイヤホン（箱付き）",st:"完了"},
+];
+// STEP1のデータに金額欄を追加（サンプルには例の金額を入れる）
+items.forEach(it=>{
+  if(!("cost" in it)){const p=SAMPLE_PRICES[it.id];it.cost=p?p[0]:null;it.sale=p?p[1]:null}
+});
+let filter="all", editing=false;
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}};
+const S=k=>STATUSES.find(s=>s.k===k);
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const yen=n=>"¥"+Math.abs(n).toLocaleString("ja-JP");
+const signed=n=>(n>0?"+":n<0?"−":"")+yen(n);
+const has=v=>typeof v==="number"&&!isNaN(v);
+const view=()=>filter==="all"?items:items.filter(x=>x.st===filter);
+
+function renderSummary(){
+  const rows=view();
+  const costRows=rows.filter(x=>has(x.cost)), saleRows=rows.filter(x=>has(x.sale));
+  const cost=costRows.reduce((a,x)=>a+x.cost,0), sale=saleRows.reduce((a,x)=>a+x.sale,0);
+  const both=rows.filter(x=>has(x.cost)&&has(x.sale));
+  const profit=both.reduce((a,x)=>a+x.sale-x.cost,0);
+  document.getElementById("sumScope").textContent=filter==="all"?"すべての商品":filter+"の商品";
+  document.getElementById("sumCount").textContent=rows.length+"件";
+  const p=document.getElementById("sumProfit");
+  p.textContent=signed(profit);p.className="big yen "+(profit>0?"pos":profit<0?"neg":"");
+  document.getElementById("sumCost").textContent=yen(cost);
+  document.getElementById("sumSale").textContent=yen(sale);
+  document.getElementById("sumCostSub").textContent=costRows.length+"件分";
+  document.getElementById("sumSaleSub").textContent=saleRows.length+"件分";
+}
+function renderTiles(){
+  const tiles=[{k:"all",label:"すべて",c:"--accent",n:items.length},
+    ...STATUSES.map(s=>({k:s.k,label:s.k,c:s.c,n:items.filter(x=>x.st===s.k).length}))];
+  document.getElementById("tiles").innerHTML=tiles.map(t=>`
+    <button class="tile ${filter===t.k?"on":""}" style="--c:var(${t.c})" data-f="${t.k}" type="button">
+      <span class="top"><span class="dot">${t.k==="all"?"≡":""}</span><span class="n">${t.n}</span></span>
+      <span class="lbl">${t.label}</span>
+    </button>`).join("");
+}
+function plHTML(it){
+  if(!has(it.cost)||!has(it.sale)) return `<span class="pl none">利益 —</span>`;
+  const d=it.sale-it.cost;
+  return `<span class="pl ${d>0?"pos":d<0?"neg":""}">${signed(d)}</span>`;
+}
+function renderList(){
+  const rows=view();
+  document.getElementById("listTitle").textContent=filter==="all"?"すべて":filter;
+  document.getElementById("listCount").textContent=rows.length+"件";
+  const list=document.getElementById("list");
+  list.classList.toggle("editing",editing);
+  if(!rows.length){list.innerHTML=`<div class="empty">「${filter}」の商品はありません</div>`;return}
+  list.innerHTML=rows.map(it=>{const s=S(it.st);return `
+    <div class="row ${it.st==="完了"?"is-done":""}" style="--c:var(${s.c});--cbg:var(${s.bg})" data-id="${it.id}">
+      <button class="del" type="button" aria-label="削除">−</button>
+      <button class="check ${it.st==="完了"?"done":""}" type="button" aria-label="完了にする"></button>
+      <div class="body">
+        <div class="line1">
+          <div class="name"><input id="n${it.id}" value="${esc(it.name)}" aria-label="商品名"></div>
+          <label class="pill"><select id="s${it.id}" aria-label="ステータス">
+            ${STATUSES.map(o=>`<option ${o.k===it.st?"selected":""}>${o.k}</option>`).join("")}
+          </select></label>
+        </div>
+        <div class="money">
+          <label class="amt"><span>獲得</span>¥<input id="c${it.id}" data-f="cost" inputmode="numeric" placeholder="—" value="${has(it.cost)?it.cost.toLocaleString("ja-JP"):""}" aria-label="獲得金額"></label>
+          <span class="arrow" aria-hidden="true">→</span>
+          <label class="amt"><span>売上</span>¥<input id="p${it.id}" data-f="sale" inputmode="numeric" placeholder="—" value="${has(it.sale)?it.sale.toLocaleString("ja-JP"):""}" aria-label="売上金額"></label>
+          ${plHTML(it)}
+        </div>
+      </div>
+    </div>`}).join("");
+}
+const render=()=>{renderSummary();renderTiles();renderList()};
+
+document.getElementById("tiles").addEventListener("click",e=>{
+  const t=e.target.closest(".tile");if(!t)return;
+  filter=(filter===t.dataset.f&&t.dataset.f!=="all")?"all":t.dataset.f;render();
+});
+const list=document.getElementById("list");
+const itemOf=el=>items.find(x=>x.id==el.closest(".row").dataset.id);
+list.addEventListener("change",e=>{
+  if(e.target.tagName==="SELECT"){itemOf(e.target).st=e.target.value;save();render()}
+});
+list.addEventListener("input",e=>{
+  const el=e.target;if(el.tagName!=="INPUT")return;
+  const it=itemOf(el);
+  if(el.dataset.f){
+    const digits=el.value.replace(/[^\d０-９]/g,"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+    it[el.dataset.f]=digits===""?null:Number(digits);
+    el.value=digits===""?"":Number(digits).toLocaleString("ja-JP");
+    el.closest(".money").querySelector(".pl").outerHTML=plHTML(it);
+    renderSummary();
+  } else it.name=el.value;
+  save();
+});
+list.addEventListener("click",e=>{
+  if(!e.target.closest(".row"))return;
+  const it=itemOf(e.target);
+  if(e.target.closest(".check")){
+    if(it.st==="完了"){it.st=it.prev||"販売中"}else{it.prev=it.st;it.st="完了"}
+    save();render();
+  }
+  if(e.target.closest(".del")){items=items.filter(x=>x!==it);save();render()}
+});
+document.getElementById("addForm").addEventListener("submit",e=>{
+  e.preventDefault();const inp=document.getElementById("newName");const v=inp.value.trim();if(!v)return;
+  items.push({id:Date.now(),name:v,st:filter==="all"?"未獲得":filter,cost:null,sale:null});
+  inp.value="";save();render();
+});
+document.getElementById("editBtn").addEventListener("click",e=>{
+  editing=!editing;e.target.textContent=editing?"完了":"編集";renderList();
+});
+render();
+</script>
+</body>
+</html>
